@@ -30,7 +30,7 @@
 </head>
 <body class="h-screen w-screen flex flex-col items-center justify-center">
 
-    <div id="game-container" class="relative w-full max-w-lg h-full max-h-[850px] bg-slate-100 flex flex-col shadow-2xl overflow-hidden">
+    <div id="game-container" class="relative w-full max-w-4xl h-full bg-slate-100 flex flex-col shadow-2xl overflow-hidden">
         
         <!-- ヘッダー（ステータス表示） -->
         <header class="bg-white/95 px-3 py-2 flex flex-col gap-1 shadow-md z-10 border-b-4 border-slate-300">
