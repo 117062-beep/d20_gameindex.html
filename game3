@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>あつまれ！柴犬の島 - 完全版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+            overflow: hidden;
+            background-color: #1e293b; /* slate-800 */
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
+        }
+        canvas {
+            image-rendering: pixelated;
+        }
+        .dpad-btn:active, .dpad-btn.active {
+            background-color: #cbd5e1 !important;
+            transform: scale(0.95);
+        }
+        .action-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 rgba(0,0,0,0.2) !important;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center">
+
+    <div id="game-container" class="relative w-full max-w-4xl h-full bg-slate-100 flex flex-col shadow-2xl overflow-hidden">
+        
+        <!-- ヘッダー（ステータス表示） -->
+        <header class="bg-white/95 px-3 py-2 flex flex-col gap-1 shadow-md z-10 border-b-4 border-slate-300">
+            <div class="flex flex-wrap gap-2 justify-between items-center w-full">
+                <div class="flex gap-2">
+                    <div id="location-badge" class="bg-purple-100 px-3 py-1 rounded-full border-2 border-purple-200 text-purple-700 font-bold text-xs flex items-center shadow-inner">
+                        📍 草原
+                    </div>
+                    <div id="age-badge" class="bg-yellow-100 px-3 py-1 rounded-full border-2 border-yellow-200 text-yellow-700 font-bold text-xs flex items-center shadow-inner">
+                        🐾 1代目 (ATK: 1)
+                    </div>
+                </div>
+                <div class="bg-rose-50 px-3 py-1 rounded-full border-2 border-rose-200 text-rose-700 font-bold text-xs shadow-inner flex items-center gap-1">
+                    ⚔️ 討伐数: <span id="score-count" class="text-sm">0</span>
+                </div>
+            </div>
+            <!-- 寿命ゲージ -->
+            <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden shadow-inner border border-slate-300">
+                <div id="life-bar" class="bg-emerald-400 h-full transition-all duration-200" style="width: 100%;"></div>
+            </div>
+        </header>
+
+        <!-- メイン画面（Canvas） -->
+        <main class="flex-1 relative w-full h-full bg-slate-900">
+            <canvas id="gameCanvas" class="absolute inset-0 w-full h-full cursor-pointer outline-none" tabindex="0"></canvas>
+            
+            <div id="tutorial-text" class="absolute top-4 left-0 right-0 text-center pointer-events-none opacity-70">
+                <p class="text-slate-800 font-bold text-xs sm:text-sm bg-white/70 inline-block px-3 py-1 rounded-full backdrop-blur-sm shadow">
+                    十字キーかWASDで歩こう！
+                </p>
+            </div>
+        </main>
+
+        <!-- 下部操作パネル -->
+        <footer class="bg-slate-100 p-3 pb-5 sm:p-4 border-t-4 border-slate-300 z-10 flex flex-col gap-3">
+            
+            <!-- アクションボタン -->
+            <div class="flex justify-between gap-2">
+                <button id="btn-bark" class="action-btn flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-xl shadow-[0_4px_0_#b45309] flex flex-col items-center text-xs sm:text-sm transition-transform">
+                    <span class="text-base mb-0.5">🗣️</span>ほえる<span class="text-[10px] block font-normal -mt-1">(Space)</span>
+                </button>
+                <button id="btn-dressup" class="action-btn flex-1 bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 rounded-xl shadow-[0_4px_0_#6b21a8] flex flex-col items-center text-xs sm:text-sm transition-transform">
+                    <span class="text-base mb-0.5">👔</span>きせかえ
+                </button>
+            </div>
+
+            <!-- 十字キー -->
+            <div class="flex justify-center mt-1">
+                <div class="grid grid-cols-3 grid-rows-3 gap-1.5 w-32 h-32 sm:w-36 sm:h-36">
+                    <div></div>
+                    <button id="dpad-up" class="dpad-btn bg-slate-200 border-2 border-slate-300 rounded-lg shadow-sm text-slate-600 font-bold text-xl flex justify-center items-center">▲</button>
+                    <div></div>
+                    
+                    <button id="dpad-left" class="dpad-btn bg-slate-200 border-2 border-slate-300 rounded-lg shadow-sm text-slate-600 font-bold text-xl flex justify-center items-center">◄</button>
+                    <div class="flex justify-center items-center text-slate-400 text-[10px] font-bold">MOVE</div>
+                    <button id="dpad-right" class="dpad-btn bg-slate-200 border-2 border-slate-300 rounded-lg shadow-sm text-slate-600 font-bold text-xl flex justify-center items-center">►</button>
+                    
+                    <div></div>
+                    <button id="dpad-down" class="dpad-btn bg-slate-200 border-2 border-slate-300 rounded-lg shadow-sm text-slate-600 font-bold text-xl flex justify-center items-center">▼</button>
+                    <div></div>
+                </div>
+            </div>
+        </footer>
+
+        <!-- きせかえモーダル -->
+        <div id="dressup-modal" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200">
+            <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border-4 border-purple-300 transform scale-95 transition-transform duration-200" id="modal-content">
+                <div class="bg-purple-100 p-3 border-b-2 border-purple-200">
+                    <h2 class="font-bold text-purple-800 text-center flex items-center justify-center gap-2"><span>👔</span> クローゼット</h2>
+                </div>
+                
+                <div class="p-4 flex flex-col gap-4">
+                    <div>
+                        <p class="text-xs font-bold text-slate-500 mb-2">毛色</p>
+                        <div class="grid grid-cols-3 gap-2" id="coat-options"></div>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-500 mb-2">アクセサリ</p>
+                        <div class="grid grid-cols-2 gap-2" id="acc-options"></div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 border-t-2 border-slate-100">
+                    <button id="btn-close-modal" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 rounded-xl shadow-[0_4px_0_#6b21a8] active:translate-y-1 active:shadow-[0_2px_0_#6b21a8] transition-all">
+                        決定する！
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === キャンバス設定 ===
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // === データ定義 ===
+        const COATS = {
+            red: { id: 'red', name: '赤柴', body: '#c86414', cheek: '#f4e0c8', leg: '#a84c0a' },
+            black: { id: 'black', name: '黒柴', body: '#323232', cheek: '#f4e0c8', leg: '#1a1a1a' },
+            white: { id: 'white', name: '白柴', body: '#f0ece1', cheek: '#ffffff', leg: '#d4d0c5' }
+        };
+
+        const ACCESSORIES = {
+            none: { id: 'none', name: 'なし' },
+            scarf: { id: 'scarf', name: '🍃 バンダナ' },
+            ribbon: { id: 'ribbon', name: '🎀 リボン' },
+            crown: { id: 'crown', name: '👑 王冠' }
+        };
+
+        const LOCATIONS = [
+            { id: 'grass', name: 'ステージ1 (草原)' },
+            { id: 'beach', name: 'ステージ2 (ビーチ)' },
+            { id: 'mountain', name: 'ステージ3 (岩山)' },
+            { id: 'city', name: 'ステージ4 (都会)' },
+            { id: 'boss', name: 'ステージ5 (ボスの島)' }
+        ];
+
+        // 約60フレーム = 1秒（寿命を30秒に設定）
+        const LIFESPAN_MAX = 1800;
+
+        let stats = { score: 0 };
+        let generation = 1;
+        let currentLocationIndex = 0;
+        let lifespan = LIFESPAN_MAX;
+        
+        let gameState = 'playing'; // 'playing', 'cleared'
+        let currentStage = 1;
+        let killsInStage = 0;
+        let bossSpawned = false;
+
+        const player = {
+            x: canvas.width / 2, y: canvas.height / 2,
+            baseSpeed: 3.5, direction: 1,
+            coat: 'red', acc: 'scarf',
+            walkCycle: 0, isMoving: false, barkTimer: 0,
+            atk: 1
+        };
+
+        const enemies = [];
+        const graves = [];
+        const particles = [];
+        const keys = { up: false, down: false, left: false, right: false };
+
+        // 背景バッジの初期化
+        document.getElementById('location-badge').innerText = `📍 ${LOCATIONS[0].name}`;
+
+        // === 音声 (Web Audio API) ===
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            
+            if (type === 'hit') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
+                gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'defeat') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+                gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
+            } else if (type === 'bark') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(300, now); osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+                gain.gain.setValueAtTime(0.5, now); gain.gain.linearRampToValueAtTime(0, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'chime' || type === 'rebirth') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'pop') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(440, now); osc.frequency.exponentialRampToValueAtTime(880, now + 0.05);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.05);
+                osc.start(now); osc.stop(now + 0.05);
+            }
+        }
+
+        // === 入力ハンドリング ===
+        canvas.addEventListener('mousedown', () => canvas.focus());
+        
+        window.addEventListener('keydown', e => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+            if (e.key === 'ArrowUp' || e.code === 'KeyW' || e.key === 'w') keys.up = true;
+            if (e.key === 'ArrowDown' || e.code === 'KeyS' || e.key === 's') keys.down = true;
+            if (e.key === 'ArrowLeft' || e.code === 'KeyA' || e.key === 'a') keys.left = true;
+            if (e.key === 'ArrowRight' || e.code === 'KeyD' || e.key === 'd') keys.right = true;
+            if (e.code === 'Space' || e.key === ' ') {
+                actionBark();
+                document.getElementById('btn-bark').classList.add('scale-95', 'bg-amber-600');
+            }
+        }, { passive: false });
+        
+        window.addEventListener('keyup', e => {
+            if (e.key === 'ArrowUp' || e.code === 'KeyW' || e.key === 'w') keys.up = false;
+            if (e.key === 'ArrowDown' || e.code === 'KeyS' || e.key === 's') keys.down = false;
+            if (e.key === 'ArrowLeft' || e.code === 'KeyA' || e.key === 'a') keys.left = false;
+            if (e.key === 'ArrowRight' || e.code === 'KeyD' || e.key === 'd') keys.right = false;
+            if (e.code === 'Space' || e.key === ' ') {
+                document.getElementById('btn-bark').classList.remove('scale-95', 'bg-amber-600');
+            }
+        });
+
+        function setupDpad(btnId, keyName) {
+            const btn = document.getElementById(btnId);
+            const start = (e) => { e.preventDefault(); keys[keyName] = true; btn.classList.add('active'); };
+            const end = (e) => { e.preventDefault(); keys[keyName] = false; btn.classList.remove('active'); };
+            btn.addEventListener('touchstart', start); btn.addEventListener('touchend', end);
+            btn.addEventListener('mousedown', start); btn.addEventListener('mouseup', end);
+            btn.addEventListener('mouseleave', end);
+        }
+        setupDpad('dpad-up', 'up'); setupDpad('dpad-down', 'down');
+        setupDpad('dpad-left', 'left'); setupDpad('dpad-right', 'right');
+
+        // === アクション機能 ===
+        function actionBark() {
+            if (player.barkTimer > 0 || gameState !== 'playing') return;
+            player.barkTimer = 20; 
+            playSound('bark');
+            createParticle(player.x, player.y - 30, 'ワン！');
+            
+            enemies.forEach(e => {
+                const dist = Math.hypot(player.x - e.x, player.y - e.y);
+                const hitRadius = 80 + (e.isBoss ? e.size / 2 : 0);
+                if (dist < hitRadius) {
+                    e.hp -= player.atk * 2;
+                    e.flash = 10;
+                    e.vx = (e.x - player.x) / dist * 5;
+                    e.vy = (e.y - player.y) / dist * 5;
+                    playSound('hit');
+                    createParticle(e.x, e.y - 10, `${player.atk * 2} dmg!`);
+                }
+            });
+        }
+        document.getElementById('btn-bark').addEventListener('click', actionBark);
+
+        // モーダル
+        const modal = document.getElementById('dressup-modal');
+        const modalContent = document.getElementById('modal-content');
+        
+        function renderModalOptions() {
+            const coatContainer = document.getElementById('coat-options'); coatContainer.innerHTML = '';
+            Object.values(COATS).forEach(c => {
+                const btn = document.createElement('button');
+                btn.className = `py-2 rounded-xl border-2 font-bold text-xs sm:text-sm transition-all ${player.coat === c.id ? 'bg-purple-100 border-purple-500 text-purple-800' : 'bg-white border-slate-200 text-slate-600'}`;
+                btn.innerText = c.name;
+                btn.onclick = () => { player.coat = c.id; playSound('pop'); renderModalOptions(); };
+                coatContainer.appendChild(btn);
+            });
+            const accContainer = document.getElementById('acc-options'); accContainer.innerHTML = '';
+            Object.values(ACCESSORIES).forEach(a => {
+                const btn = document.createElement('button');
+                btn.className = `py-2 rounded-xl border-2 font-bold text-xs sm:text-sm transition-all ${player.acc === a.id ? 'bg-purple-100 border-purple-500 text-purple-800' : 'bg-white border-slate-200 text-slate-600'}`;
+                btn.innerText = a.name;
+                btn.onclick = () => { player.acc = a.id; playSound('pop'); renderModalOptions(); };
+                accContainer.appendChild(btn);
+            });
+        }
+
+        document.getElementById('btn-dressup').addEventListener('click', () => {
+            renderModalOptions(); modal.classList.remove('opacity-0', 'pointer-events-none'); modalContent.classList.remove('scale-95'); playSound('pop');
+        });
+        document.getElementById('btn-close-modal').addEventListener('click', () => {
+            modal.classList.add('opacity-0', 'pointer-events-none'); modalContent.classList.add('scale-95');
+            playSound('pop'); createParticle(player.x, player.y - 20, '✨');
+        });
+
+        function createParticle(x, y, text) { particles.push({ x, y, text, life: 1.0, vy: -1.5 }); }
+
+        function spawnEnemy() {
+            if (gameState !== 'playing') return;
+            
+            if (currentStage === 5) {
+                if (!bossSpawned) { spawnBoss(); bossSpawned = true; }
+                if (enemies.length > 3) return; // ステージ5はお供少なめ
+            } else {
+                if (enemies.length > 4 + currentStage) return;
+            }
+
+            const spawnEdge = Math.floor(Math.random() * 4);
+            let ex = 0, ey = 0;
+            if (spawnEdge === 0) { ex = Math.random() * canvas.width; ey = -20; }
+            else if (spawnEdge === 1) { ex = canvas.width + 20; ey = Math.random() * canvas.height; }
+            else if (spawnEdge === 2) { ex = Math.random() * canvas.width; ey = canvas.height + 20; }
+            else { ex = -20; ey = Math.random() * canvas.height; }
+            
+            const maxHp = 1 + currentStage * generation;
+            enemies.push({ x: ex, y: ey, hp: maxHp, maxHp: maxHp, vx: 0, vy: 0, flash: 0, size: 14 + Math.random() * 6, isBoss: false });
+        }
+
+        function spawnBoss() {
+            const maxHp = 40 + generation * 10;
+            enemies.push({ x: canvas.width / 2, y: -40, hp: maxHp, maxHp: maxHp, vx: 0, vy: 0, flash: 0, size: 40, isBoss: true });
+            createParticle(canvas.width / 2, 50, '⚠️ BOSS ⚠️');
+            playSound('defeat');
+        }
+
+        // === 描画ロジック ===
+        function drawLeg(x, y, length, angle, color) {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, length); ctx.stroke();
+            ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, length, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+        }
+
+        function drawEnemy(e) {
+            ctx.save(); ctx.translate(e.x, e.y);
+            ctx.fillStyle = e.flash > 0 ? '#ffffff' : (e.isBoss ? '#7f1d1d' : '#3b82f6');
+            ctx.beginPath();
+            ctx.arc(0, 0, e.size, Math.PI, 0);
+            ctx.ellipse(0, 0, e.size, e.size * 0.6, 0, 0, Math.PI);
+            ctx.fill();
+            
+            ctx.fillStyle = e.isBoss ? '#fef08a' : 'white'; 
+            ctx.beginPath(); ctx.arc(-e.size*0.4, -e.size*0.2, e.size*0.25, 0, Math.PI*2); ctx.arc(e.size*0.4, -e.size*0.2, e.size*0.25, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = e.isBoss ? 'red' : 'black'; 
+            ctx.beginPath(); ctx.arc(-e.size*0.4, -e.size*0.2, e.size*0.1, 0, Math.PI*2); ctx.arc(e.size*0.4, -e.size*0.2, e.size*0.1, 0, Math.PI*2); ctx.fill();
+            
+            if (e.isBoss) {
+                ctx.fillStyle = '#fcd34d';
+                ctx.beginPath(); ctx.moveTo(-e.size*0.5, -e.size*0.7); ctx.lineTo(-e.size*0.8, -e.size*1.2); ctx.lineTo(-e.size*0.2, -e.size*0.9); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(e.size*0.5, -e.size*0.7); ctx.lineTo(e.size*0.8, -e.size*1.2); ctx.lineTo(e.size*0.2, -e.size*0.9); ctx.fill();
+            }
+
+            const barW = 20 + (e.isBoss ? 20 : 0);
+            const barY = -e.size - 8;
+            ctx.fillStyle = '#ef4444'; ctx.fillRect(-barW/2, barY, barW, 4);
+            ctx.fillStyle = '#22c55e'; ctx.fillRect(-barW/2, barY, barW * (e.hp / e.maxHp), 4);
+            ctx.restore();
+        }
+
+        function drawShiba(dog, isPlayer = false) {
+            const coat = COATS[dog.coat];
+            ctx.save(); ctx.translate(dog.x, dog.y);
+            
+            if (isPlayer) {
+                ctx.fillStyle = 'rgba(0,0,0,0.15)';
+                ctx.beginPath(); ctx.ellipse(0, 16, 20, 6, 0, 0, Math.PI*2); ctx.fill();
+            }
+
+            ctx.scale(dog.direction, 1);
+
+            let actionY = 0;
+            if (dog.barkTimer > 0) actionY = -Math.sin((20 - dog.barkTimer) / 20 * Math.PI) * 5;
+            const swing = dog.isMoving ? Math.sin(dog.walkCycle) * 0.45 : 0;
+
+            drawLeg(-10, 10 + actionY, 12, -swing, coat.leg); drawLeg(8, 10 + actionY, 12, swing, coat.leg);
+            ctx.strokeStyle = coat.body; ctx.lineWidth = 5.5; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.arc(-15, -4 + actionY, 7, Math.PI * 0.3, Math.PI * 1.5); ctx.stroke();
+            ctx.fillStyle = coat.body; ctx.beginPath(); ctx.ellipse(0, 2 + actionY, 18, 12, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = coat.cheek; ctx.beginPath(); ctx.ellipse(2, 6 + actionY, 14, 7, 0, 0, Math.PI*2); ctx.fill();
+            drawLeg(-6, 12 + actionY, 11, swing, coat.body); drawLeg(12, 12 + actionY, 11, -swing, coat.body);
+
+            const headX = 14, headY = -8 + actionY;
+            ctx.fillStyle = coat.body; ctx.beginPath(); ctx.arc(headX, headY, 11, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = coat.cheek; ctx.beginPath(); ctx.arc(headX + 3, headY + 3, 6, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = coat.body; ctx.beginPath(); ctx.moveTo(headX - 6, headY - 8); ctx.lineTo(headX - 2, headY - 18); ctx.lineTo(headX + 3, headY - 10); ctx.fill();
+            
+            ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(headX + 5, headY - 2, 1.8, 0, Math.PI*2); ctx.arc(headX + 11, headY + 2, 2.2, 0, Math.PI*2); ctx.fill();
+            if (dog.barkTimer > 0) {
+                ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(headX + 10, headY + 6, 3, 0, Math.PI*2); ctx.fill();
+            } else {
+                ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(headX + 10, headY + 5, 1, 0, Math.PI*2); ctx.fill();
+            }
+
+            if (dog.acc === 'scarf') {
+                ctx.fillStyle = '#16a34a'; ctx.beginPath(); ctx.arc(headX - 4, headY + 8, 5, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'white'; ctx.fillRect(headX - 5, headY + 7, 1.5, 1.5); ctx.fillRect(headX - 3, headY + 9, 1.5, 1.5);
+            } else if (dog.acc === 'ribbon') {
+                ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(headX - 6, headY + 7, 3, 0, Math.PI*2); ctx.arc(headX - 1, headY + 7, 3, 0, Math.PI*2); ctx.fill();
+            } else if (dog.acc === 'crown') {
+                ctx.fillStyle = '#eab308'; ctx.beginPath(); ctx.moveTo(headX - 5, headY - 10); ctx.lineTo(headX - 8, headY - 18); ctx.lineTo(headX - 2, headY - 14); ctx.lineTo(headX + 2, headY - 19); ctx.lineTo(headX + 6, headY - 14); ctx.lineTo(headX + 10, headY - 18); ctx.lineTo(headX + 8, headY - 10); ctx.fill();
+            }
+            ctx.restore();
+            
+            if (dog.barkTimer > 10) {
+                ctx.strokeStyle = 'white'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(dog.x, dog.y, 60 - dog.barkTimer*2, 0, Math.PI*2); ctx.stroke();
+            }
+        }
+
+        function drawGrave(g) {
+            ctx.save(); ctx.translate(g.x, g.y);
+            ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.arc(0, -10, 10, Math.PI, 0); ctx.lineTo(10, 10); ctx.lineTo(-10, 10); ctx.fill();
+            ctx.fillStyle = '#cbd5e1'; ctx.fillRect(-2, -6, 4, 10); ctx.fillRect(-5, -3, 10, 4);
+            ctx.restore();
+        }
+
+        function renderBackground() {
+            const locId = LOCATIONS[currentLocationIndex].id;
+            if (locId === 'grass') {
+                ctx.fillStyle = '#8bd450'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#74ba3e'; for (let i = 10; i < canvas.width; i += 40) for (let j = 10; j < canvas.height; j += 40) ctx.fillRect(i, j, 4, 2);
+            } else if (locId === 'beach') {
+                ctx.fillStyle = '#fde047'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#facc15'; for (let i = 0; i < canvas.width; i += 60) for (let j = 0; j < canvas.height; j += 60) { ctx.beginPath(); ctx.arc(i + 30, j + 30, 6, 0, Math.PI); ctx.fill(); }
+            } else if (locId === 'mountain') {
+                ctx.fillStyle = '#94a3b8'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#64748b'; for (let i = 0; i < canvas.width; i += 80) for (let j = 0; j < canvas.height; j += 80) { ctx.beginPath(); ctx.moveTo(i+20, j+10); ctx.lineTo(i+40, j+30); ctx.lineTo(i+10, j+40); ctx.fill(); }
+            } else if (locId === 'city') {
+                ctx.fillStyle = '#475569'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#334155'; for (let i = 0; i < canvas.width; i += 50) for (let j = 0; j < canvas.height; j += 50) ctx.fillRect(i+5, j+5, 40, 40);
+            } else if (locId === 'boss') {
+                ctx.fillStyle = '#1e1b4b'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#312e81'; for (let i = 20; i < canvas.width; i += 60) for (let j = 20; j < canvas.height; j += 60) { ctx.beginPath(); ctx.moveTo(i, j); ctx.lineTo(i+10, j+20); ctx.lineTo(i-10, j+20); ctx.fill(); }
+            }
+        }
+
+        // === メインループ ===
+        function update() {
+            if (gameState === 'cleared') return;
+
+            lifespan--;
+            const lifePercent = Math.max(0, (lifespan / LIFESPAN_MAX) * 100);
+            document.getElementById('life-bar').style.width = `${lifePercent}%`;
+            
+            if (lifespan <= 0) {
+                graves.push({ x: player.x, y: player.y });
+                generation++; 
+                player.atk = generation;
+                lifespan = LIFESPAN_MAX; 
+                player.x = canvas.width / 2; player.y = canvas.height / 2;
+                
+                const coats = Object.keys(COATS); player.coat = coats[Math.floor(Math.random() * coats.length)];
+                playSound('rebirth'); createParticle(player.x, player.y - 20, '✨転生✨');
+            }
+
+            document.getElementById('age-badge').innerText = `🐾 ${generation}代目 (ATK: ${player.atk})`;
+            document.getElementById('score-count').innerText = stats.score;
+
+            if (player.barkTimer > 0) {
+                player.barkTimer--; 
+                player.isMoving = false;
+            } else {
+                let moved = false;
+                if (keys.up) { player.y -= player.baseSpeed; moved = true; }
+                if (keys.down) { player.y += player.baseSpeed; moved = true; }
+                if (keys.left) { player.x -= player.baseSpeed; player.direction = -1; moved = true; }
+                if (keys.right) { player.x += player.baseSpeed; player.direction = 1; moved = true; }
+
+                player.isMoving = moved;
+                if (moved) {
+                    player.walkCycle += (player.baseSpeed * 0.1);
+                    const tut = document.getElementById('tutorial-text');
+                    if(tut) tut.style.display = 'none';
+                } else {
+                    player.walkCycle = 0;
+                }
+                player.x = Math.max(20, Math.min(canvas.width - 20, player.x));
+                player.y = Math.max(20, Math.min(canvas.height - 20, player.y));
+            }
+
+            if (Math.random() < 0.03) spawnEnemy();
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                if (e.flash > 0) e.flash--;
+                
+                if (Math.abs(e.vx) > 0.5 || Math.abs(e.vy) > 0.5) {
+                    e.x += e.vx; e.y += e.vy;
+                    e.vx *= 0.8; e.vy *= 0.8;
+                } else {
+                    const dx = player.x - e.x;
+                    const dy = player.y - e.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > 0) {
+                        e.x += (dx / dist) * 1.2;
+                        e.y += (dy / dist) * 1.2;
+                    }
+                    
+                    if (dist < 28 && e.flash === 0 && player.barkTimer === 0) {
+                        e.hp -= player.atk;
+                        e.flash = 10;
+                        e.vx = -(dx / dist) * 6;
+                        e.vy = -(dy / dist) * 6;
+                        playSound('hit');
+                        createParticle(e.x, e.y - 10, `${player.atk} dmg!`);
+                        
+                        player.x -= (dx / dist) * 5;
+                        player.y -= (dy / dist) * 5;
+                    }
+                }
+                
+                if (e.hp <= 0) {
+                    playSound('defeat');
+                    createParticle(e.x, e.y, '💥');
+                    stats.score++;
+                    
+                    if (e.isBoss) {
+                        gameState = 'cleared';
+                        createParticle(canvas.width/2, canvas.height/2, 'CLEAR!');
+                    } else if (currentStage < 5) {
+                        killsInStage++;
+                        if (killsInStage >= 10) {
+                            currentStage++;
+                            killsInStage = 0;
+                            currentLocationIndex = currentStage - 1;
+                            document.getElementById('location-badge').innerText = `📍 ${LOCATIONS[currentLocationIndex].name}`;
+                            playSound('chime');
+                            createParticle(player.x, player.y - 40, `STAGE ${currentStage} !!`);
+                        }
+                    }
+
+                    enemies.splice(i, 1);
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i]; p.y += p.vy; p.life -= 0.03;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            renderBackground();
+
+            const renderQueue = [];
+            graves.forEach(g => renderQueue.push({ type: 'grave', y: g.y, obj: g }));
+            enemies.forEach(e => renderQueue.push({ type: 'enemy', y: e.y, obj: e }));
+            renderQueue.push({ type: 'player', y: player.y, obj: player });
+
+            renderQueue.sort((a, b) => a.y - b.y);
+
+            renderQueue.forEach(item => {
+                if (item.type === 'grave') drawGrave(item.obj);
+                if (item.type === 'enemy') drawEnemy(item.obj);
+                if (item.type === 'player') drawShiba(item.obj, true);
+            });
+
+            particles.forEach(p => {
+                ctx.save(); ctx.globalAlpha = p.life; ctx.font = 'bold 16px sans-serif';
+                ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
+                ctx.strokeText(p.text, p.x - 10, p.y); ctx.fillText(p.text, p.x - 10, p.y);
+                ctx.restore();
+            });
+
+            if (gameState === 'cleared') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#fde047'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('GAME CLEAR!!', canvas.width / 2, canvas.height / 2 - 10);
+                ctx.fillStyle = 'white'; ctx.font = 'bold 18px sans-serif';
+                ctx.fillText(`到達世代: ${generation}代目 / 総討伐数: ${stats.score}`, canvas.width / 2, canvas.height / 2 + 30);
+                ctx.textAlign = 'left';
+            }
+        }
+
+        function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+
+        window.onload = () => { canvas.focus(); gameLoop(); };
+    </script>
+</body>
+</html>
